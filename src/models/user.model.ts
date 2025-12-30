@@ -22,6 +22,9 @@ export interface IUSER extends Document {
   password: string
   roles: Role[]
   approved: Status
+  phone?: string
+  address?: string
+  avatarUrl?: string
   otp?: string
   otpExpires?: Date
 }
@@ -38,10 +41,13 @@ const userSchema = new Schema<IUSER>({
     default: Status.NONE
   }
   ,
+  phone: { type: String },
+  address: { type: String },
+  avatarUrl: { type: String },
 
   // OTP for password reset
   otp: { type: String },
   otpExpires: { type: Date }
-})
+}, { timestamps: true })
 
 export const User = mongoose.model<IUSER>("User", userSchema)

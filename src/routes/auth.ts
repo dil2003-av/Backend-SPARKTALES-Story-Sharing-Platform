@@ -9,11 +9,13 @@ import {
   verifyOtp,
   resetWithOtp,
   registerAdmin,
-  registerUser
+  registerUser,
+  updateMyProfile
 } from "../controllers/auth.controler"
 import { authenticate } from "../middleware/auth"
 import { requireRole } from "../middleware/role"
 import { Role } from "../models/user.model"
+import { upload } from "../middleware/upload"
 
 const router = Router()
 
@@ -44,6 +46,9 @@ router.post(
 
 // me - Admin or User both
 router.get("/me", authenticate, getMyProfile)
+
+// update my profile
+router.put("/profile", authenticate, upload.single("avatar"), updateMyProfile)
 
 // router.get("/test", authenticate, () => {})
 

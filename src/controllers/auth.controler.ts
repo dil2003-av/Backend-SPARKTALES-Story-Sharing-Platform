@@ -1,4 +1,5 @@
 import { Request, Response } from "express";
+import type { Express } from "express";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import dotenv from "dotenv";
@@ -8,11 +9,25 @@ import { createNotificationForAdmins } from "./notification.controller";
 import { signAccessToken, signRefreshToken } from "../utils/tokens";
 import { AUthRequest } from "../middleware/auth";
 import sendMail from "../utils/mailer"
+import cloudinary from "../config/clodinaryconfig";
 
 dotenv.config();
 
 const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET as string;
 const JWT_RESET_SECRET = process.env.JWT_RESET_SECRET || process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET;
+
+const uploadBufferToCloudinary = async (file?: Express.Multer.File): Promise<string | null> => {
+  if (!file) return null;
+
+  return await new Promise<string>((resolve, reject) => {
+    const stream = cloudinary.uploader.upload_stream({ resource_type: "image" }, (error, result) => {
+      if (error || !result) return reject(error || new Error("Upload failed"));
+      resolve(result.secure_url);
+    });
+
+    stream.end(file.buffer);
+  });
+};
 
 // -------------------- REGISTER USER --------------------
 export const registerUser = async (req: Request, res: Response) => {
@@ -113,11 +128,45 @@ export const getMyProfile = async (req: AUthRequest, res: Response) => {
   try {
     if (!req.user) return res.status(401).json({ message: "Unauthorized" });
 
-    const user = await User.findById(req.user.sub).select("-password");
+    const user = await User.findById(req.user.sub).select("-password -otp -otpExpires");
     if (!user) return res.status(404).json({ message: "User not found" });
 
-    const { email, roles, _id } = user as IUSER;
-    res.status(200).json({ message: "ok", data: { id: _id, email, roles } });
+    const { email, roles, _id, firstname, lastname, phone, address, avatarUrl, createdAt, approved } = user as IUSER & { createdAt?: Date };
+    res.status(200).json({
+      message: "ok",
+      data: { id: _id, email, roles, firstname, lastname, phone, address, avatarUrl, createdAt, approved }
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Internal server error" });
+  }
+};
+
+// -------------------- UPDATE MY PROFILE --------------------
+export const updateMyProfile = async (req: AUthRequest, res: Response) => {
+  try {
+    if (!req.user) return res.status(401).json({ message: "Unauthorized" });
+
+    const user = await User.findById(req.user.sub).select("-password -otp -otpExpires");
+    if (!user) return res.status(404).json({ message: "User not found" });
+
+    const { firstname, lastname, phone, address } = req.body as Partial<IUSER>;
+
+    if (typeof firstname === "string") user.firstname = firstname;
+    if (typeof lastname === "string") user.lastname = lastname;
+    if (typeof phone === "string") user.phone = phone;
+    if (typeof address === "string") user.address = address;
+
+    const avatarUrl = await uploadBufferToCloudinary(req.file as Express.Multer.File | undefined);
+    if (avatarUrl) user.avatarUrl = avatarUrl;
+
+    await user.save();
+
+    const { email, roles, _id, createdAt, approved } = user as IUSER & { createdAt?: Date };
+    res.status(200).json({
+      message: "Profile updated",
+      data: { id: _id, email, roles, firstname: user.firstname, lastname: user.lastname, phone: user.phone, address: user.address, avatarUrl: user.avatarUrl, createdAt, approved }
+    });
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Internal server error" });
