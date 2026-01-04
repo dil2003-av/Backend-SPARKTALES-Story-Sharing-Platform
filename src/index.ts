@@ -25,6 +25,24 @@ if (!MONGO_URI) {
 
 const app = express()
 
+// MongoDB connection with caching for serverless
+let isConnected = false;
+
+const connectDB = async () => {
+  if (isConnected) {
+    return;
+  }
+  
+  try {
+    await mongoose.connect(MONGO_URI);
+    isConnected = true;
+    console.log("DB connected");
+  } catch (err) {
+    console.error("DB connection failed:", err);
+    throw err;
+  }
+};
+
 app.use(express.json())
 app.use(
   cors({
@@ -34,9 +52,20 @@ app.use(
       process.env.FRONTEND_URL || "https://frontend-sparktales-story-sharing-p-psi.vercel.app"
     ].filter(Boolean),
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    credentials: true
+    credentials: true,
+    allowedHeaders: ["Content-Type", "Authorization"]
   })
 )
+
+// Middleware to ensure DB connection
+app.use(async (req, res, next) => {
+  try {
+    await connectDB();
+    next();
+  } catch (err) {
+    res.status(500).json({ message: "Database connection failed" });
+  }
+});
 
 app.use("/api/v1/auth", authRouter)
 app.use("/api/v1/debug", debugRouter)
@@ -48,13 +77,11 @@ app.use("/api/v1/admin", adminRouter)
 app.use("/api/v1/notifications", notificationRouter)
 
 //sample route without auth
-app.get("/",(req,resl) => {
-  resl.send("BE running")
+app.get("/",(req,res) => {
+  res.send("BE running")
 })
 
-
 // sample route with auth
-
 // public
 app.get("/test-1", (req, res) => {})
 
@@ -64,21 +91,20 @@ app.get("/test-2", authenticate, (req, res) => {})
 // admin only
 app.get("/test-3", authenticate, requireRole([Role.ADMIN]), (req, res) => {})
 
-mongoose
-  .connect(MONGO_URI)
-  .then(() => {
-    console.log("DB connected")
-  })
-  .catch((err) => {
-    console.error(err)
-    process.exit(1)
+// For local development
+if (process.env.NODE_ENV !== 'production') {
+  connectDB().then(() => {
+    app.listen(PORT, () => {
+      console.log(`Server is running on port ${PORT}`)
+    })
+  }).catch(err => {
+    console.error("Failed to start server:", err);
+    process.exit(1);
   });
-  
-// connectCloudinary();
+}
 
-app.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`)
-})
+// Export for Vercel serverless
+export default app;
 // --------------------------------------
 // // Built in middlewares (Global)
 // app.use(express.json())
