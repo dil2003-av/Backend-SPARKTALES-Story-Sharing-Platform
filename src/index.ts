@@ -31,9 +31,9 @@ app.use(
     origin: [
       "http://localhost:5173",
       "http://localhost:5174", 
-      process.env.FRONTEND_URL || "https://frontend-sparktales-story-sharing-p-psi.vercel.app/"
+      process.env.FRONTEND_URL || "https://frontend-sparktales-story-sharing-p-psi.vercel.app"
     ].filter(Boolean),
-    methods: ["GET", "POST", "PUT", "PATCH", "DELETE"],
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     credentials: true
   })
 )
